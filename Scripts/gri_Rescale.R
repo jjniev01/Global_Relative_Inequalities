@@ -366,7 +366,7 @@ threshold_val <- 5
 years <- c(2000,2003,2006,2009,2012)
 ##  The year to base the mask off of, i.e. apply the threshold:
 mask_year <- 2012
-use_log <- T
+use_log <- F
 make_mask <- F
 ##  END:  GENERAL STATEMENTS
 ####
@@ -510,12 +510,14 @@ for(y in years){
   pop_ras <- pop_ras * mask_ras
   pop_ras[pop_ras == 0] <- NA
   print(paste0("     Start: ", s_time,"     End: ",Sys.time()))
-  #  Log transofrm the population prior to getting the descriptive stats:
-  s_time <- Sys.time()
-  print(paste0("Log transforming ", y,"..."))
-  pop_ras <- log({pop_ras+1})
-  print(paste0("     Start: ", s_time,"     End: ",Sys.time()))
   
+  if(use_log){
+    #  Log transofrm the population prior to getting the descriptive stats:
+    s_time <- Sys.time()
+    print(paste0("Log transforming ", y,"..."))
+    pop_ras <- log({pop_ras+1})
+    print(paste0("     Start: ", s_time,"     End: ",Sys.time()))
+  }
   ##  Write the log trans and masked pop ras to file:
   s_time <- Sys.time()
   print(paste0("Writing log transformed and masked population ",y,
@@ -523,7 +525,7 @@ for(y in years){
   writeRaster(pop_ras,
               filename = paste0(pop_raster_dir,"Derived/ppkm_",y,
                                 "_thresh_",threshold_val,
-                                "_LOG",
+                                ifelse(use_log,"_LOG",""),
                                 ".tif"),
               overwrite = T,
               datatype = "FLT8S",
@@ -556,7 +558,7 @@ for(year in years){
   ##  Load the population raster:
   pop_raster_path <- paste0(pop_raster_dir,"Derived/ppkm_",year,
                             "_thresh_",threshold_val,
-                            "_LOG",
+                            ifelse(use_log,"_LOG",""),
                             ".tif")
   pop_ras <- raster(pop_raster_path)
   
@@ -599,7 +601,7 @@ for(year in years){
   writeRaster(pop_rescale_ras,
               filename = paste0(pop_raster_dir,"Derived/ppkm_",year,
                                 "_rescaled_thresh_",threshold_val,
-                                "_LOG",
+                                ifelse(use_log,"_LOG",""),
                                 ".tif"),
               overwrite = T,
               datatype = "FLT8S",
@@ -615,7 +617,7 @@ for(year in years){
 for(y in years){
   print(raster(paste0(pop_raster_dir,"Derived/ppkm_",y,
                       "_rescaled_thresh_",threshold_val,
-                      "_LOG",
+                      ifelse(use_log,"_LOG",""),
                       ".tif")))
 }
 
@@ -628,6 +630,7 @@ for(y in years){
 max_vec <- c()
 # sd_vec <- c()
 min_vec <- c()
+##  Pull the mask indices:
 for(y in years){
   print(paste0("Working on urb density stats for year ",y,"..."))
   ##  Load the urbdensn raster:
@@ -644,22 +647,26 @@ for(y in years){
   ##  Mask the urbdens using the threshold mask:
   s_time <- Sys.time()
   print(paste0("Masking urb dens ", y,"..."))
-  urbdens_ras <- urbdens_ras * urbdens_ras
-  print(paste0("     Start: ", s_time,"     End: ",Sys.time()))
-  #  Log transofrm the urbdens prior to getting the descriptive stats:
-  s_time <- Sys.time()
-  print(paste0("Log transforming ", y,"..."))
-  urbdens_ras <- log({urbdens_ras+0.01})
+  urbdens_ras <- urbdens_ras * mask_ras
   print(paste0("     Start: ", s_time,"     End: ",Sys.time()))
   
+  
+  if(use_log){
+    #  Log transofrm the urbdens prior to getting the descriptive stats:
+    s_time <- Sys.time()
+    print(paste0("Log transforming ", y,"..."))
+    urbdens_ras <- log({urbdens_ras+0.01})
+    print(paste0("     Start: ", s_time,"     End: ",Sys.time()))
+  }
   ##  Write the log trans and masked pop ras to file:
   s_time <- Sys.time()
-  print(paste0("Writing log transformed and masked urbdens ",y,
+  print(paste0("Writing ", ifelse(use_log,"log transformed and",""),
+               " masked urbdens ",y,
                " to file..."))
   writeRaster(urbdens_ras,
               filename = paste0(urbdens_raster_dir,"Derived/urbdens_",y,
                                 "_thresh_",threshold_val,
-                                "_LOG",
+                                ifelse(use_log,"_LOG",""),
                                 ".tif"),
               overwrite = T,
               datatype = "FLT8S",
@@ -691,10 +698,10 @@ urbdens_min <- min(min_vec,na.rm=T)
 urbdens_range <- urbdens_max - urbdens_min
 
 for(year in years){
-  ##  Load the urbdensulation raster:
+  ##  Load the urbdens raster:
   urbdens_raster_path <- paste0(urbdens_raster_dir,"Derived/urbdens_",year,
                                 "_thresh_",threshold_val,
-                                "_LOG",
+                                ifelse(use_log,"_LOG",""),
                                 ".tif")
   urbdens_ras <- raster(urbdens_raster_path)
   
@@ -713,7 +720,7 @@ for(year in years){
   writeRaster(urbdens_rescale_ras,
               filename = paste0(urbdens_raster_dir,"Derived/urbdens_",year,
                                 "_rescaled_thresh_",threshold_val,
-                                "_LOG",
+                                ifelse(use_log,"_LOG",""),
                                 ".tif"),
               overwrite = T,
               datatype = "FLT8S",
@@ -729,7 +736,7 @@ for(year in years){
 for(y in years){
   print(raster(paste0(urbdens_raster_dir,"Derived/urbdens_",year,
                       "_rescaled_thresh_",threshold_val,
-                      "_LOG",
+                      ifelse(use_log,"_LOG",""),
                       ".tif")))
 } 
 
@@ -755,12 +762,15 @@ for(y in years){
   print(paste0("Masking LAN ", y,"..."))
   lan_ras <- lan_ras * mask_ras
   print(paste0("     Start: ", s_time,"     End: ",Sys.time()))
-  # ##  Log transofrm the lan prior to getting the descriptive stats:
-  s_time <- Sys.time()
-  print(paste0("Log transforming ", y,"..."))
-  lan_ras <- log({lan_ras+1})
-  print(paste0("     Start: ", s_time,"     End: ",Sys.time()))
   
+  
+  # ##  Log transofrm the lan prior to getting the descriptive stats:
+  if(use_log){
+    s_time <- Sys.time()
+    print(paste0("Log transforming ", y,"..."))
+    lan_ras <- log({lan_ras+1})
+    print(paste0("     Start: ", s_time,"     End: ",Sys.time()))
+  }
   ##  Write the log trans and masked lan ras to file:
   s_time <- Sys.time()
   print(paste0("Writing log transformed and masked LAN ",y,
@@ -768,7 +778,7 @@ for(y in years){
   writeRaster(lan_ras,
               filename =paste0(lan_raster_dir,"Derived/lan_",y,
                                "_thresh_",threshold_val,
-                               "_LOG",
+                               ifelse(use_log,"_LOG",""),
                                ".tif"),
               overwrite = T,
               datatype = "FLT8S",
@@ -807,7 +817,7 @@ for(year in years){
   ##  Load the LAN raster:
   lan_raster_path <-  paste0(lan_raster_dir,"Derived/lan_",year,
                              "_thresh_",threshold_val,
-                             "_LOG",
+                             ifelse(use_log,"_LOG",""),
                              ".tif")
   lan_ras <- raster(lan_raster_path)
   
@@ -844,7 +854,7 @@ for(year in years){
   writeRaster(lan_rescale_ras,
               filename = paste0(lan_raster_dir,"Derived/lan_",year,
                                 "_rescaled_thresh_",threshold_val,
-                                "_LOG",
+                                ifelse(use_log,"_LOG",""),
                                 ".tif"),
               overwrite = T,
               datatype = "FLT8S",
@@ -859,7 +869,7 @@ for(year in years){
 for(y in years){
   print(raster(paste0(lan_raster_dir,"Derived/lan_",y,
                       "_rescaled_thresh_",threshold_val,
-                      "_LOG",
+                      ifelse(use_log,"_LOG",""),
                       ".tif")))
 }
 
@@ -877,16 +887,17 @@ for(year in years){
   print(paste0("Loading rasters for ", year,"..."))
   pop_rescale_lyr <- paste0(pop_raster_dir,"Derived/ppkm_",year,
                             "_rescaled_thresh_",threshold_val,
-                            "_LOG",
+                            ifelse(use_log,"_LOG",""),
                             ".tif")
   pop_rescale <- raster(pop_rescale_lyr)
   urbdens_rescale_lyr <- paste0(urbdens_raster_dir,"Derived/urbdens_",year,
                                 "_rescaled_thresh_",threshold_val,
-                                "_LOG",".tif")
+                                ifelse(use_log,"_LOG",""),
+                                ".tif")
   urbdens_rescale <- raster(urbdens_rescale_lyr)
   lan_rescale_lyr <- paste0(lan_raster_dir,"Derived/lan_",year,
                             "_rescaled_thresh_",threshold_val,
-                            "_LOG",
+                            ifelse(use_log,"_LOG",""),
                             ".tif")
   lan_rescale <- raster(lan_rescale_lyr)
   
@@ -931,7 +942,7 @@ for(year in years){
               filename = paste0("E:/Research/Global_Relative_Inequalities/Output/",
                                 "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
                                 threshold_val,
-                                "_LOG",
+                                ifelse(use_log,"_LOG",""),
                                 ".tif"),
               overwrite = T,
               datatype = "FLT8S",
