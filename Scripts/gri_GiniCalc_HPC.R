@@ -4,16 +4,24 @@ require(data.table)
 require(reldist)
 require(snow)
 
+args <- commandArgs(TRUE)
 
-root <- "E:/Research/Global_Relative_Inequalities/"
+#root <- "E:/Research/Global_Relative_Inequalities/"
+root <- "/mainfs/scratch/jjn1n15/GRI/"
 backtrans <- F
-year <- 2012
-make_sum <- F
-threshold_val <- 5
+year <- as.numeric(eval(parse(text=args[1])))
 
-core_number <- 7
-
-
+##  NOTE 2020-06-01
+##       when running this on IRIDIS 5 for some reason it crashes everytime when
+##       the core number is greater than 12. Must be a RAM overflow issue given 
+##       the number of pixels we are putting into a vector. May be able to 
+##       increase the core number when running using smaller subnational units.
+core_number <- as.numeric(eval(parse(text=args[2])))
+#12
+threshold_val <- as.numeric(eval(parse(text=args[3])))
+#5
+make_sum <- as.logical(eval(parse(text=args[4])))
+#F
 
 
 ##  GENERAL FUNCTION DEFINITIONS -----
@@ -72,15 +80,12 @@ giniCalc <- function(i){
   
   #print(paste0("     Unit ", g))
   for(l in 1:3){
-    
-    ##  Extract the values from the value raster:
     foo_values <- extract(value_ras,
-                          which(values(zonal_ras)==g),
-                          layer = l)
+                          which(values(zonal_ras)==g))
+    
     if(!is.null(foo_values)){
       ## Remove any NA values:
       foo_values <- foo_values[!is.na(foo_values)]
-      
       ##  Sort in ascending order:
       foo_values <- foo_values[order(foo_values)]
       
@@ -90,6 +95,7 @@ giniCalc <- function(i){
       foo_25 <- as.numeric(foo_quant[1])
       foo_50 <- as.numeric(foo_quant[2])
       foo_75 <- as.numeric(foo_quant[3])
+      
     }else{
       foo_gini <- NA
       foo_quant <- NA
@@ -116,6 +122,7 @@ giniCalc <- function(i){
       foo_tot_25 <- as.numeric(foo_tot_quant[1])
       foo_tot_50 <- as.numeric(foo_tot_quant[2])
       foo_tot_75 <- as.numeric(foo_tot_quant[3])
+      
     }else{
       foo_tot_gini <- NA
       foo_tot_quant <- NA
@@ -123,8 +130,6 @@ giniCalc <- function(i){
       foo_tot_50 <- NA
       foo_tot_75 <- NA
     }
-    
-    
     rm(foo_tot_values)
     gc()
     
@@ -175,13 +180,11 @@ iso_df <- read.csv(paste0(root,
                           "Data/L0_Zonal_1km/",
                           "Mastergrid countrycodeID with UN continents_BETA.csv"),
                    stringsAsFactors = F)
-iso_df <- iso_df[!is.na(iso_df$ISO_number),]
 
 iso_codes <- unique(iso_df$ISO_number)
-iso_codes <- iso_codes[!is.na(iso_codes)]
 
 ##  Remove some countries that are not relevant (i.e. Antarctica):
-iso_codes <- iso_codes[!{iso_codes %in% c(10,900,901)}]
+iso_codes <- iso_codes[!{iso_codes %in% c(10)}]
 
 ##  If we need to back transform the rasters first:
 if(backtrans & 
@@ -336,6 +339,7 @@ clusterGini <- function(gini_dt,
   clusterEvalQ(cl, {
     require(raster)
     require(reldist)
+    require(data.table)
   })
   ##  Pass off the required data and functions to the nodes in the cluster
   ##   - this includes the list of lists used for informing predictions, and the
@@ -471,3 +475,5 @@ endCluster()
 #                                    wpTimeDiff(tStart,tEnd)))
 # }
 wpTimeDiff(s_time,Sys.time())
+saveRDS(gini_dt_filled,
+        file = paste0(root,"Output/GRI_Gini_data_",year,"_",threshold_val,".RDS"))
