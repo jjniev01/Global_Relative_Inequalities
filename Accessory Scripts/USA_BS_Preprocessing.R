@@ -10,8 +10,8 @@ require(doParallel)
 root <- "E:/Research/Global_Relative_Inequalities/Data/Built_Settlement/"
 
 ## USA shapefile paths:
-usa_shp_dir <- "T:/Projects/WP515640_Global/DataIn/USA_Data/shp/"
-state_l1_grid_dir <- "T:/Projects/WP515640_Global/DataIn/USA_Data/Croped_Covariates_ZS/"
+usa_shp_dir <- "E:/Research/Global_Relative_Inequalities/Data/USA_shp/"
+#state_l1_grid_dir <- "E:/Research/Global_Relative_Inequalities/Data/L1_Zonal_100m/"
 usa_shp_paths <- list.files(paste0(usa_shp_dir),recursive = T,full.names = T)
 usa_shp_paths <- grep(".*//.*/.*[.]shp", usa_shp_paths, value = T, perl = T)
 
@@ -337,7 +337,7 @@ for(shp in usa_shp_paths){
     
     shpf <- st_read(shp, state)
     ##  Bring in the USA level1 mastergrid:
-    l1_master_usa <- raster(paste0("T:\\Projects\\WP515640_Global\\Raster\\Mastergrids\\Level1_FINAL\\Countries\\usa_grid_100m_L1_mosaic_fix.tif"))
+    l1_master_usa <- raster("E:/Research/Global_Relative_Inequalities/Data/L1_Zonal_100m/usa_grid_100m_L1_mosaic_fix.tif")
       
     ##  Crop to the extents of the shapefile:
     l1_master_usa_crop <- crop(l1_master_usa,shpf)
@@ -363,7 +363,7 @@ for(shp in usa_shp_paths){
     }
     shpf <- st_read(shp, state)
     ##  Bring in the USA level1 mastergrid:
-    l1_master_usa <- raster(paste0("T:\\Projects\\WP515640_Global\\Raster\\Mastergrids\\Level1_FINAL\\Countries\\usa_grid_100m_L1_mosaic_fix.tif"))
+    l1_master_usa <- raster("E:/Research/Global_Relative_Inequalities/Data/L1_Zonal_100m/usa_grid_100m_L1_mosaic_fix.tif")
     
     ##  Crop to the extents of the shapefile:
     l1_master_usa_crop <- crop(l1_master_usa,shpf)
@@ -822,7 +822,7 @@ print(paste0("     End: ", Sys.time()))
 ##  Bring in the USA Shapefile:
 
 for(y in c(2003,2006,2009)){
-  usa_shp_50 <- st_read(paste0("T:\\Projects\\WP515640_Global\\DataIn\\ShapeFiles\\ISO_249\\USA\\840_USA.shp"),
+  usa_shp_50 <- st_read(paste0(usa_shp_dir,"840_USA.shp"),
                         layer= "840_USA",stringsAsFactors = F)
   usa_shp_50$mask_val <- 0
   ##TODO:  JJN 2020-03-12 ISSUE with the shapefile not lining up with the US 
