@@ -1,0 +1,44 @@
+<html>
+
+<head>
+<title>Global Relative Inequalities Interactive Legend</title>
+</head>
+
+<body>
+
+<p>This is an R HTML document. When you click the <b>Knit HTML</b> button a web page will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:</p>
+
+
+<p>You can also embed plots, for example:</p>
+
+<!--begin.rcode fig.width=7, fig.height=6
+require(plotly)
+##  Create an expanded dataframe of the cube we are going to create with 
+##  dimensions x, y, and z; 6 cubes on each axis:
+grd <- expand.grid(Population=seq(0,1,0.2), 
+                   Urban=seq(0,1,0.2), 
+                   Lights=seq(0,1,0.2))
+##  Create the colors:
+grd$col <- rgb(red=sqrt(grd$Population^2),
+               green=sqrt(grd$Urban^2),
+               blue=sqrt(grd$Lights^2))
+#alpha=0.1)
+# maxColorValue = 255)
+
+fig <- plot_ly(grd,
+               x=~Population,
+               y=~Urban,
+               z=~Lights, 
+               marker =list(symbol="square", color=grd$col),
+               showlegend=F) %>%
+  add_markers() %>%
+  layout(plot_bgcolor="black",
+         paper_bgcolor="black",
+         scene=list(xaxis = list(title="Population",color="white"),
+                    yaxis = list(title="Urban",color="white"),
+                    zaxis = list(title="Lights",color="white")))
+fig
+end.rcode-->
+
+</body>
+</html>
