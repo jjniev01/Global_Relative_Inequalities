@@ -1,6 +1,6 @@
 require(raster)
 require(data.table)
-require(snoW)
+require(snow)
 
 args <- commandArgs(TRUE)
 

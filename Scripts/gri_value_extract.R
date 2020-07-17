@@ -76,7 +76,10 @@ iso_codes <- unique(iso_df$ISO_number)
 non_shared_isos <- c(124, 643, 840, 76, 32, 152)
 iso_codes <- iso_codes[!{iso_codes %in% non_shared_isos}]
 ##  Remove some countries that are not relevant (i.e. Antarctica):
-iso_codes <- iso_codes[!{iso_codes %in% c(10, 900, 901)}]
+iso_codes <- iso_codes[!{iso_codes %in% c(10, 900, 901,
+                                          74, 86, 260, 
+                                          239, 334, 612,
+                                          744, 581)}]
 
 ##  Repaste the bigs ones on the end:
 iso_codes <- c(iso_codes, non_shared_isos)
@@ -84,47 +87,47 @@ iso_codes <- iso_codes[!is.na(iso_codes)]
 
 
 
-# if(make_sum & !file.exists(paste0(root,"Output/",
-#                                   "ppkm_urb_lan_rescale_stack_",year,
-#                                   "_threshold_",
-#                                   threshold_val,"_SUM",".tif"))){
-#   foo_ras_1 <- raster(paste0(root,"Output/",
-#                              "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
-#                              threshold_val,".tif"),
-#                       band = 1)
-#   foo_ras_2 <- raster(paste0(root,"Output/",
-#                              "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
-#                              threshold_val,".tif"),
-#                       band = 2)
-#   foo_ras_3 <- raster(paste0(root,"Output/",
-#                              "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
-#                              threshold_val,".tif"),
-#                       band = 3)
-#   tot_ras <- foo_ras_1 + foo_ras_2 + foo_ras_3
-#   writeRaster(tot_ras,
-#               filename = paste0(root,"Output/",
-#                                 "ppkm_urb_lan_rescale_stack_",
-#                                 year,"_threshold_",
-#                                 threshold_val,"_SUM",".tif"),
-#               format = "GTiff",
-#               datatype = "FLT8S",
-#               overwrite = T,
-#               options = c("COMPRESS = LZW"))
-#   # stackApply(value_ras,
-#   #                     indices = c(1,1,1),
-#   #                     fun = "sum",
-#   #                     na.rm = F,
-#   # filename = paste0(root,"Output/",
-#   #                   "ppkm_urb_lan_rescale_stack_",
-#   #                   year,"_threshold_",
-#   #                   threshold_val,"_SUM",".tif"),
-#   # format = "GTiff",
-#   # datatype = dataType(value_ras),
-#   # overwrite = T,
-#   # options = c("COMPRESS = LZW"))
-#   rm(foo_ras_1, foo_ras_2, foo_ras_3, tot_ras)
-# }
-# gc()
+#if(make_sum & !file.exists(paste0(root,"Output/",
+#                                  "ppkm_urb_lan_rescale_stack_",year,
+#                                  "_threshold_",
+#                                  threshold_val,"_SUM",".tif"))){
+#  foo_ras_1 <- raster(paste0(root,"Output/",
+#                             "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
+#                             threshold_val,".tif"),
+#                      band = 1)
+#  foo_ras_2 <- raster(paste0(root,"Output/",
+#                             "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
+#                             threshold_val,".tif"),
+#                      band = 2)
+#  foo_ras_3 <- raster(paste0(root,"Output/",
+#                             "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
+#                             threshold_val,".tif"),
+#                      band = 3)
+#  tot_ras <- foo_ras_1 + foo_ras_2 + foo_ras_3
+#  writeRaster(tot_ras,
+#              filename = paste0(root,"Output/",
+#                                "ppkm_urb_lan_rescale_stack_",
+#                                year,"_threshold_",
+#                                threshold_val,"_SUM",".tif"),
+#              format = "GTiff",
+#              datatype = "FLT8S",
+#              overwrite = T,
+#              options = c("COMPRESS = LZW"))
+  # stackApply(value_ras,
+  #                     indices = c(1,1,1),
+  #                     fun = "sum",
+  #                     na.rm = F,
+  # filename = paste0(root,"Output/",
+  #                   "ppkm_urb_lan_rescale_stack_",
+  #                   year,"_threshold_",
+  #                   threshold_val,"_SUM",".tif"),
+  # format = "GTiff",
+  # datatype = dataType(value_ras),
+  # overwrite = T,
+  # options = c("COMPRESS = LZW"))
+#  rm(foo_ras_1, foo_ras_2, foo_ras_3, tot_ras)
+#}
+#gc()
 
 
 
@@ -133,10 +136,11 @@ value_ras <- raster(paste0(root,"Output/",
                            "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
                            threshold_val,".tif"))
 
-# value_tot_ras <- raster(paste0(root,"Output/",
-#                                "ppkm_urb_lan_rescale_stack_",
-#                                year,"_threshold_",
-#                                threshold_val,"_SUM",".tif"))
+#value_tot_ras <- raster(paste0(root,"Output/",
+#                               "ppkm_urb_lan_rescale_stack_",
+#                               year,"_threshold_",
+#                               threshold_val,"_SUM",".tif"))
+
 
 
 
@@ -170,12 +174,11 @@ for(i in 1:length(iso_codes)){
     saveRDS(foo_dt,
             file = paste0(outdir,"GRI_",g,"_",year,
                           "_threshold_",threshold_val,".RDS"))
-  }
-  tEnd <- Sys.time()
-  wpProgressMessage(i,
-                    max = length(iso_codes),
-                    label = paste0("Received country ", g,
-                                   " Processing Time: ",
-                                   wpTimeDiff(tStart,tEnd)))
-  
+    }
+    tEnd <- Sys.time()
+    wpProgressMessage(i,
+                      max = length(iso_codes),
+                      label = paste0("Received country ", g,
+                                     " Processing Time: ",
+                                     wpTimeDiff(tStart,tEnd)))
 }

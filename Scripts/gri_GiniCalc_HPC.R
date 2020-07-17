@@ -11,11 +11,6 @@ root <- "/mainfs/scratch/jjn1n15/GRI/"
 backtrans <- F
 year <- as.numeric(eval(parse(text=args[1])))
 
-##  NOTE 2020-06-01
-##       when running this on IRIDIS 5 for some reason it crashes everytime when
-##       the core number is greater than 12. Must be a RAM overflow issue given 
-##       the number of pixels we are putting into a vector. May be able to 
-##       increase the core number when running using smaller subnational units.
 core_number <- as.numeric(eval(parse(text=args[2])))
 #12
 threshold_val <- as.numeric(eval(parse(text=args[3])))
@@ -184,7 +179,10 @@ iso_df <- read.csv(paste0(root,
 iso_codes <- unique(iso_df$ISO_number)
 
 ##  Remove some countries that are not relevant (i.e. Antarctica):
-iso_codes <- iso_codes[!{iso_codes %in% c(10)}]
+iso_codes <- iso_codes[!{iso_codes %in% c(10, 900, 901,
+                                          74, 86, 260, 
+                                          239, 334, 612,
+                                          744, 581)}]
 
 ##  If we need to back transform the rasters first:
 if(backtrans & 
