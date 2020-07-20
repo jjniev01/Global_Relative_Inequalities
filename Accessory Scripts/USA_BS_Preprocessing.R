@@ -9,11 +9,32 @@ require(doParallel)
 
 root <- "E:/Research/Global_Relative_Inequalities/Data/Built_Settlement/"
 
+## Level 1 USA mastergrid path:
+l1_master_usa_path <- "E:/Research/Global_Relative_Inequalities/Data/L1_Zonal_100m/usa_grid_100m_L1_mosaic_fix.tif"
 ## USA shapefile paths:
 usa_shp_dir <- "E:/Research/Global_Relative_Inequalities/Data/USA_shp/"
 #state_l1_grid_dir <- "E:/Research/Global_Relative_Inequalities/Data/L1_Zonal_100m/"
 usa_shp_paths <- list.files(paste0(usa_shp_dir),recursive = T,full.names = T)
 usa_shp_paths <- grep(".*//.*/.*[.]shp", usa_shp_paths, value = T, perl = T)
+
+##  Years to interpolate between 2000 and 2012:
+interp_years <- c(2003,2006,2009)
+
+##  Years to extrapolate past 2000 and 2012:
+extrap_years <- c(2015,2018)
+
+##  Reprocess masks?
+mask_reprocess <- F
+
+##  Reprocess 2000 and 2012 binaries?
+reprocess_binaries <- F
+
+##  Reaggregate 200 and 2012 binaries to 1km?
+reprocess_resample <- F
+
+####  FUNCTION DEFINITIONS -----------------------------------------------------
+
+
 
 
 ensure_dir <- function(dir_path){
@@ -164,7 +185,8 @@ cluster_lin_interp <- function(prediction_raster_path_list,
   
   clusterExport(cl, c("usa_stack",
                       "prediction_ras_path_list",
-                      "prediction_raster"))
+                      "prediction_raster",
+                      "predict_years"))
   clusterExport(cl, "blocks", envir=environment())
   
   #################################################################################
@@ -200,10 +222,19 @@ cluster_lin_interp <- function(prediction_raster_path_list,
     #
     predictions <- numeric(length=length(row_data[,1]))
     predictions[] <- NA
+    ##  Set up our expression string to be parsed:
+    eval_str <- "predictions <- data.frame("
+    for(t in 1:length(interp_years)){
+      eval_str <- paste0(eval_str,
+                         sprintf("'Y%d\' = predictions", 
+                                 interp_years[t]),
+                         ifelse(t!=length(interp_years),", ",""))
+    }
+    eval_str <- paste0(eval_str,")")
     
-    predictions <- data.frame("Y2003"=predictions, 
-                              "Y2006"=predictions, 
-                              "Y2009"=predictions)              
+    ##  Create our data.frame to hold our predictions
+    eval(parse(text=eval_str))
+                  
     
     
     ## If we have data where NAs or Inf values are not present then we 
@@ -214,14 +245,24 @@ cluster_lin_interp <- function(prediction_raster_path_list,
       ##  Get the linear slope by subtracting the 2000 proportion values from 
       ##  the 2012 proporton values and dividing by the number of years:
       slope_set <- {row_data[roi_subset,2]-row_data[roi_subset,1]}/{2012-2000}
-      predictions[roi_subset,"Y2003"] <- row_data[roi_subset,1] + slope_set*{2003-2000}
-      predictions[roi_subset,"Y2006"] <- row_data[roi_subset,1] + slope_set*{2006-2000}
-      predictions[roi_subset,"Y2009"] <- row_data[roi_subset,1] + slope_set*{2009-2000}
+      
+      for(y in interp_years){
+        eval_str <- paste0(eval_str,")")
+        predictions[roi_subset,paste0("Y",y)] <- row_data[roi_subset,1] + slope_set*{y-2000}
+        
+      }
     }
-    if(any(c(predictions$Y2003 > 1,
-             predictions$Y2006 > 1,
-             predictions$Y2009 > 1),na.rm=T)){
-      stop(paste0("Interpolations greater than 1; figure it out."))
+    eval_str <- "c("
+    for(t in 1:length(interp_years)){
+      eval_str <- paste0(eval_str,
+                         sprintf("predictions$Y%d > 1", 
+                                 interp_years[t]),
+                         ifelse(t!=length(interp_years),", ",""))
+    }
+    eval_str <- paste0(eval_str,", na.rm=T)")
+    ##  If any of our values are greater than 1 (out of bounds) toss an error message.
+    if(any(eval(parse(eval_str)))){
+      stop(paste0("Predictions greater than 1; figure it out."))
     }else{return(predictions)}
   } 
   #
@@ -238,27 +279,56 @@ cluster_lin_interp <- function(prediction_raster_path_list,
   
   ## Start the raster writer object so we can store our results as they
   ## come back from our cluster:  
-  prediction_raster_2003 <- prediction_raster
-  prediction_raster_2003 <- raster::writeStart(prediction_raster, 
-                                               filename=prediction_raster_path_list[[1]], 
-                                               format="GTiff", 
-                                               datatype="FLT4S", 
-                                               overwrite=TRUE, 
-                                               options=c("COMPRESS=LZW"))
-  prediction_raster_2006 <- prediction_raster
-  prediction_raster_2006 <- raster::writeStart(prediction_raster, 
-                                               filename=prediction_raster_path_list[[2]], 
-                                               format="GTiff", 
-                                               datatype="FLT4S", 
-                                               overwrite=TRUE, 
-                                               options=c("COMPRESS=LZW"))
-  prediction_raster_2009 <- prediction_raster
-  prediction_raster_2009 <- raster::writeStart(prediction_raster, 
-                                               filename=prediction_raster_path_list[[3]], 
-                                               format="GTiff", 
-                                               datatype="FLT4S", 
-                                               overwrite=TRUE, 
-                                               options=c("COMPRESS=LZW"))
+  for(t in 1:length(interp_years)){
+    eval_str_1 <- sprintf("prediction_raster_%d <- prediction_raster",
+                          interp_years[t])
+    eval_str_2 <- paste0(sprintf("prediction_raster_%d <- ",interp_years[t]),
+                         "raster::writeStart(prediction_raster, ",
+                         "filename=prediction_raster_path_list[[t]],",
+                         " format='GTiff', datatype='FLT4S',",
+                         " overwrite=TRUE, options=c('COMPRESS=LZW'))")
+                            
+    ##  Assign a year specific copy of the prediction raster:
+    eval(parse(eval_str_1))
+    ##  Begin the raster writing operations for the year specific raster:
+    eval(parse(eval_str_2))
+  }
+  # 
+  # prediction_raster_2003 <- prediction_raster
+  # prediction_raster_2003 <- raster::writeStart(prediction_raster, 
+  #                                              filename=prediction_raster_path_list[[1]], 
+  #                                              format="GTiff", 
+  #                                              datatype="FLT4S", 
+  #                                              overwrite=TRUE, 
+  #                                              options=c("COMPRESS=LZW"))
+  # prediction_raster_2006 <- prediction_raster
+  # prediction_raster_2006 <- raster::writeStart(prediction_raster, 
+  #                                              filename=prediction_raster_path_list[[2]], 
+  #                                              format="GTiff", 
+  #                                              datatype="FLT4S", 
+  #                                              overwrite=TRUE, 
+  #                                              options=c("COMPRESS=LZW"))
+  # prediction_raster_2009 <- prediction_raster
+  # prediction_raster_2009 <- raster::writeStart(prediction_raster, 
+  #                                              filename=prediction_raster_path_list[[3]], 
+  #                                              format="GTiff", 
+  #                                              datatype="FLT4S", 
+  #                                              overwrite=TRUE, 
+  #                                              options=c("COMPRESS=LZW"))
+  # prediction_raster_2015 <- prediction_raster
+  # prediction_raster_2015 <- raster::writeStart(prediction_raster, 
+  #                                              filename=prediction_raster_path_list[[4]], 
+  #                                              format="GTiff", 
+  #                                              datatype="FLT4S", 
+  #                                              overwrite=TRUE, 
+  #                                              options=c("COMPRESS=LZW"))
+  # prediction_raster_2018 <- prediction_raster
+  # prediction_raster_2018 <- raster::writeStart(prediction_raster, 
+  #                                              filename=prediction_raster_path_list[[5]], 
+  #                                              format="GTiff", 
+  #                                              datatype="FLT4S", 
+  #                                              overwrite=TRUE, 
+  #                                              options=c("COMPRESS=LZW"))
   
   
   ########################################################################
@@ -281,16 +351,33 @@ cluster_lin_interp <- function(prediction_raster_path_list,
     ##	Which block are we processing:
     block <- predictions$value$tag
     
-    prediction_raster_2003 <- writeValues(prediction_raster_2003, 
-                                          predictions$value$value$Y2003, 
-                                          blocks$row[block])
-    prediction_raster_2006 <- writeValues(prediction_raster_2006, 
-                                          predictions$value$value$Y2006, 
-                                          blocks$row[block])
-    prediction_raster_2009 <- writeValues(prediction_raster_2009, 
-                                          predictions$value$value$Y2009, 
-                                          blocks$row[block])
-    
+    for(t in 1:length(interp_years)){
+      eval_str <- paste0(sprintf("prediction_raster_%d <- ",interp_years[t]),
+                         sprintf("writeValues(prediction_raster_%d,",
+                         interp_years[t]),
+                         sprintf(" predictions$value$value$%d,",
+                                 interp_years[t]),
+                         " blocks$row[block])")
+                            
+      
+      ##  Write the returned values into the year-specific raster:
+      eval(parse(eval_str))
+    }
+    # prediction_raster_2003 <- writeValues(prediction_raster_2003, 
+    #                                       predictions$value$value$Y2003, 
+    #                                       blocks$row[block])
+    # prediction_raster_2006 <- writeValues(prediction_raster_2006, 
+    #                                       predictions$value$value$Y2006, 
+    #                                       blocks$row[block])
+    # prediction_raster_2009 <- writeValues(prediction_raster_2009, 
+    #                                       predictions$value$value$Y2009, 
+    #                                       blocks$row[block])
+    # prediction_raster_2015 <- writeValues(prediction_raster_2015, 
+    #                                       predictions$value$value$Y2015, 
+    #                                       blocks$row[block])
+    # prediction_raster_2018 <- writeValues(prediction_raster_2018, 
+    #                                       predictions$value$value$Y2018, 
+    #                                       blocks$row[block])
     
     ##	Check to see if we are at the end of our block list:
     ni <- nodes + i
@@ -304,15 +391,22 @@ cluster_lin_interp <- function(prediction_raster_path_list,
                                     " Processing Time: ", wpTimeDiff(tStart,tEnd)))
   }
   
-  
-  prediction_raster_2003 <- writeStop(prediction_raster_2003)
-  prediction_raster_2006 <- writeStop(prediction_raster_2006)
-  prediction_raster_2009 <- writeStop(prediction_raster_2009)
+  for(t in 1:length(interp_years)){
+    eval_str <- paste0(sprintf("prediction_raster_%d <- ",interp_years[t]),
+                       sprintf("writeStop(prediction_raster_%d)",
+                               interp_years[t]))
+    
+    
+    ##  Stop the raster writing operations:
+    eval(parse(eval_str))
+  }
+  # prediction_raster_2003 <- writeStop(prediction_raster_2003)
+  # prediction_raster_2006 <- writeStop(prediction_raster_2006)
+  # prediction_raster_2009 <- writeStop(prediction_raster_2009)
+  # prediction_raster_2015 <- writeStop(prediction_raster_2015)
+  # prediction_raster_2018 <- writeStop(prediction_raster_2018)
 }
 
-
-reprocess <- T
-mask_reprocess <- T
 
 ##  Creation of masks ----
 ## Here I will create two type of state level masks: 
@@ -337,7 +431,7 @@ for(shp in usa_shp_paths){
     
     shpf <- st_read(shp, state)
     ##  Bring in the USA level1 mastergrid:
-    l1_master_usa <- raster("E:/Research/Global_Relative_Inequalities/Data/L1_Zonal_100m/usa_grid_100m_L1_mosaic_fix.tif")
+    l1_master_usa <- raster(l1_master_usa_path)
       
     ##  Crop to the extents of the shapefile:
     l1_master_usa_crop <- crop(l1_master_usa,shpf)
@@ -363,7 +457,7 @@ for(shp in usa_shp_paths){
     }
     shpf <- st_read(shp, state)
     ##  Bring in the USA level1 mastergrid:
-    l1_master_usa <- raster("E:/Research/Global_Relative_Inequalities/Data/L1_Zonal_100m/usa_grid_100m_L1_mosaic_fix.tif")
+    l1_master_usa <- raster(l1_master_usa_path)
     
     ##  Crop to the extents of the shapefile:
     l1_master_usa_crop <- crop(l1_master_usa,shpf)
@@ -383,214 +477,16 @@ for(shp in usa_shp_paths){
 }
 
 
-##  TODO JJN 2020-03-12 Need to use the above L!-derived masks to make sure 
-##  everything below aligns properly.
+####  CREATE 2000 AND 2012 BINARIES  -------------------------------------------
 for(y in c(2000,2012)){
   for(shp in usa_shp_paths){
     ##  Pull the state name:
     state <- strsplit(basename(shp),".shp")[[1]]
-    if(reprocess == T | !file.exists(paste0(root,"USA_CutData/",state, "_",
+    if(reprocess_binaries == T | !file.exists(paste0(root,"USA_CutData/",state, "_",
                                             ifelse(y==2000,
                                                    "GHSL_ESA_2000_USA",
                                                    "GUF_GHSL_2012_USA"),
                                             ".tif"))){
-      ##  If we are dealing with Alaska or Texas....
-      # if( state %in% c("Alaska","Texas") & (!file.exists(paste0(root, 
-      #                                                           "USA_CutData/",state, "_",
-      #                                                           ifelse(y==2000,
-      #                                                                  "GHSL_ESA_2000_USA",
-      #                                                                  "GUF_GHSL_2012_USA"),
-      #                                                           ".tif")) | reprocess)){
-      #   ##  Bring in the l1 raster boundaries to tile and then use as a mask:
-      #   if(state != "Alaska"){
-      #     foo_l1_path <- Sys.glob(paste0(state_l1_grid_dir,state,"/croped/",
-      #                                    "*ccidadminl1.tif"))[1]
-      #   }else{
-      #     foo_l1_path <- paste0(root,
-      #                           "Alaska_ccidadminl1.tif")
-      #     }
-      #   foo_l1 <- raster(foo_l1_path)
-      #   
-      #   ##  Bring in the full BS layer at 100m resolution:
-      #   full_bs_ras <- raster(Sys.glob(paste0(root, "Binary/GP/",
-      #                                         ifelse(y==2000,
-      #                                                "backfiltered*.tif",
-      #                                                "GUF12*.tif")))[1])
-      #   
-      #   ##  Tile the l1 boundaries with new file names to a temporary directory.
-      #   ##  Temporary file directory:
-      #   temp_dir <- ensure_dir(paste0(root,"Temp/",state,"/"))
-      #   
-      #   ##  Crop it to the extents of the US shapefile:
-      #   crop_bs_ras_path <- paste0(temp_dir, state,
-      #                              ifelse(y==2000,
-      #                                     "GHSL_ESA_2000_USA",
-      #                                     "GUF_GHSL_2012_USA"),
-      #                              "_BS_100m_NOMASK.tif")
-      #   if(!file.exists(crop_bs_ras_path)){
-      #     print(paste0("Cropping to ", state," ", y, " Extents: ", Sys.time()))
-      #     crop(full_bs_ras,
-      #          extent(foo_l1),
-      #          filename = crop_bs_ras_path,
-      #          datatype = "INT2S",
-      #          format = "GTiff",
-      #          overwrite = T,
-      #          options = c("COMPRESS = LZW"),
-      #          snap="near")
-      #     
-      #     print(paste0("     Complete: ", Sys.time()))
-      #   }
-      #   rm(full_bs_ras)
-      #   
-      #   crop_bs_ras <- raster(crop_bs_ras_path)
-      #   
-      #   ##  Check that the extents and the number of pixels match between the l1 
-      #   ##  raster and the BS cropped raster:
-      #   extent_match <- ifelse(any(!(extent(crop_bs_ras) == extent(foo_l1)),
-      #                              na.rm = T),
-      #                          "Extents do not match.",
-      #                          "Extents match.")
-      #   n_pixels <- ifelse(ncell(crop_bs_ras) == ncell(foo_l1),
-      #                      "Same number of pixels",
-      #                      "Different numbers of pixels")
-      #   
-      #   if(n_pixels == "Same number of pixels" &
-      #      extent_match != "Extents match."){
-      #     ymin(crop_bs_ras) <- ymin(foo_l1)
-      #     ymax(crop_bs_ras) <- ymax(foo_l1)
-      #     xmin(crop_bs_ras) <- xmin(foo_l1)
-      #     xmax(crop_bs_ras) <- xmax(foo_l1)
-      #     
-      #     extent_match <- ifelse(any(!(extent(crop_bs_ras) == extent(foo_l1)),
-      #                                na.rm = T),
-      #                            "Extents do not match.",
-      #                            "Extents match.")
-      #     n_pixels <- ifelse(ncell(crop_bs_ras) == ncell(foo_l1),
-      #                        "Same number of pixels",
-      #                        "Different numbers of pixels")
-      #   }
-      #   
-      #   ##  Check if we can proceed:
-      #   if(extent_match == "Extents match." & 
-      #      n_pixels == "Same number of pixels"){
-      #     ##  Define the tiling for the l1 raster:
-      #     width <- ncol(foo_l1)
-      #     height <- nrow(foo_l1)
-      #     
-      #     ##  The width and height of the tiles we will be working with:
-      #     n_tiles <- 10000
-      #     
-      #     print(paste0("Dividing Mask Ras. ", width, " x ",
-      #                  height, " pixels into tiles with size ",
-      #                  n_tiles, "..."))
-      #     start_t <- Sys.time()
-      #     source_path <- foo_l1_path
-      #     for(i in seq(0, height, 
-      #                    by = n_tiles)){
-      #       for(j in seq(0, width, 
-      #                    by =  n_tiles)){
-      #         ##  i and j serve as the left and bottom bounds of the src_win(dow)
-      #         ##  w and h serve as the number of rows and columns to cut from the 
-      #         ##  i and j
-      #         ##  When i or j + n_tiles exceeds the rows or columns of the 
-      #         ##  raster, we revert to the respective maximum.
-      #         h <- min({i + n_tiles}, height)-i
-      #         w <- min({j + n_tiles}, width)-j
-      #         ##  Construct our gdal command line string command
-      #         gdal_string <- paste0("gdal_translate -ot UInt16 -of GTIFF -co COMPRESS=LZW ",
-      #                               "-srcwin ",
-      #                               i,", ",j,
-      #                               ", ",as.character(as.integer(h)),", ",
-      #                               as.character(as.integer(w))," ",source_path," ",
-      #                               temp_dir,"Level1_",state,
-      #                               "_",i,"_",j,".tif")
-      #         
-      #         ##  Run the command:
-      #         system(gdal_string)
-      #         
-      #       }
-      #     }
-      #     print(paste0("     Start: ", start_t))
-      #     print(paste0("     End: ", Sys.time()))
-      #     
-      #     
-      #     print(paste0("Dividing BS Ras. ", width, " x ",
-      #                  height, " pixels into tiles with size ",
-      #                  n_tiles, "..."))
-      #     start_t <- Sys.time()
-      #     source_path <- crop_bs_ras_path
-      #     for(i in seq(0, height, 
-      #                  by =  n_tiles)){
-      #       for(j in seq(0, width, 
-      #                    by =  n_tiles)){
-      #         h <- min({i + n_tiles}, height)-i
-      #         w <- min({j + n_tiles}, width)-j
-      #         ##  Construct our gdal command line string command
-      #         gdal_string <- paste0("gdal_translate -ot INT16 -of GTIFF -co COMPRESS=LZW -scale 0 1 0 1 ",
-      #                               " -srcwin ",
-      #                               i,", ",j,
-      #                               ", ",as.character(as.integer(h)),", ",
-      #                               as.character(as.integer(w))," ",source_path,
-      #                               " ",
-      #                               temp_dir,"BSCrop_",y,"_",state,
-      #                               "_",i,"_",j,".tif")
-      #         ##  Run the comand:
-      #         system(gdal_string)
-      #         
-      #       }
-      #     }
-      #     print(paste0("     Start: ", start_t))
-      #     print(paste0("     End: ", Sys.time()))
-      #     
-      #     
-      #     
-      #     ##  Get a list of all the tiles we are using as masks:
-      #     mask_tile_list <- Sys.glob(paste0(temp_dir,"Level1_",state,"*.tif"))
-      #     ##  Get a list of all the BS rasters we wish to mask:
-      #     bs_tile_list <- Sys.glob(paste0(temp_dir,"BSCrop_",y,"_",state,"*.tif"))
-      #     
-      #     ##  Now carry out the masking procedure on all of those tiles by 
-      #     ##  creating a parallel task farm:
-      #     if(length(mask_tile_list)==length(bs_tile_list)){
-      #       beginCluster()
-      #       parallel_masking(tile_list = bs_tile_list,
-      #                        mask_tile_list = mask_tile_list)
-      #       endCluster()
-      #     }
-      #     
-      #     
-      #     ##  Set the final extents and projection in a template raster:
-      #     template <- raster(extent(crop_bs_ras))
-      #     projection(template) <- "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
-      #     writeRaster(template,file=paste0(root,"USA_CutData/",state,"_",
-      #                                      ifelse(y==2000,
-      #                                             "GHSL_ESA_2000_USA",
-      #                                             "GUF_GHSL_2012_USA"),".tif"),
-      #                 overwrite = T)
-      #     rm(crop_bs_ras,foo_l1)
-      #     gc()
-      #     
-      #     start_t <- Sys.time()
-      #     ##  Now mosaic that bad boy back together:
-      #     mosaic_rasters(gdalfile=bs_tile_list, 
-      #                    dst_dataset =paste0(root,"USA_CutData/",state,"_",
-      #                                        ifelse(y==2000,
-      #                                               "GHSL_ESA_2000_USA",
-      #                                               "GUF_GHSL_2012_USA"),".tif"), 
-      #                    of = "GTiff", 
-      #                    ot = "Byte", 
-      #                    co = "COMPRESS=LZW",
-      #                    scale = c(0,1,0,1),
-      #                    verbose = T)
-      #     print(paste0("     Start: ", start_t))
-      #     print(paste0("     End: ", Sys.time()))
-      #   }else{
-      #     ##  Stop before we make a mess:
-      #     stop(paste0("Could not proceed with tiling. ", 
-      #                 extent_match,
-      #                 n_pixels))
-      #   }
-      # }
       
       ##  Bring in the USA shapefile:
       if(state!="Alaska"){
@@ -688,7 +584,8 @@ for(y in c(2000,2012)){
 ##  underestimate.
 
 ##  By year, retrieve all of the state rasters for mosaicing:
-for(y in c(2000,2012)){
+if(reprocess_resample == T){
+  for(y in c(2000,2012)){
   state_ras_list <- Sys.glob(paste0(root, "USA_CutData/*_",
                                     ifelse(y==2000,
                                            "GHSL_ESA_2000_USA",
@@ -736,7 +633,7 @@ for(y in c(2000,2012)){
   gc()
   
 }
-
+}
 ##  Prepare to tile the whole USA rasters for interpolation
 ##  Get the two rasters and bring them in:
 usa_2000_path <- paste0(root,"USA_CutData/",
@@ -795,9 +692,22 @@ if(extent_match == "Extents match." &
   ##  Construct the list of our output raster paths:
   ##  NOTE:  These files will be at 0.008333 resolution and have values 
   ##  representing interpolated BS as constructed from 100m data.
-  prediction_ras_path_list <- list(paste0(root,"USA_2003_BS_1km.tif"),
-                                   paste0(root,"USA_2006_BS_1km.tif"),
-                                   paste0(root,"USA_2009_BS_1km.tif"))
+  eval_str <- paste0("prediction_ras_path_list <- list(")
+  for(t in 1:length(interp_years)){
+    foo_str <- paste0("paste0(root,",
+                      sprintf("'USA_%d_BS_1km.tif')",interp_years[t]),
+                      ifelse(t!=length(interp_years),", ",""))
+    eval_str <- paste0(eval_str, foo_str)
+  }
+  eval_str <- paste0(eval_str, ")")
+  
+  ##  Create a list of the prediction raster paths:
+  eval(parse(eval_str))
+  # prediction_ras_path_list <- list(paste0(root,"USA_2003_BS_1km.tif"),
+  #                                  paste0(root,"USA_2006_BS_1km.tif"),
+  #                                  paste0(root,"USA_2009_BS_1km.tif"),
+  #                                  paste0(root,"USA_2015_BS_1km.tif"),
+  #                                  paste0(root,"USA_2018_BS_1km.tif"))
   
   ##  Stack the 2 USA rasters together:
   usa_stack <- stack(list(usa_2000_path,usa_2012_path))
@@ -821,7 +731,7 @@ print(paste0("     End: ", Sys.time()))
 ##  ---  Create USA Zero Mask  ---  ##
 ##  Bring in the USA Shapefile:
 
-for(y in c(2003,2006,2009)){
+for(y in c(interp_years,extrap_years)){
   usa_shp_50 <- st_read(paste0(usa_shp_dir,"840_USA.shp"),
                         layer= "840_USA",stringsAsFactors = F)
   usa_shp_50$mask_val <- 0
