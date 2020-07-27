@@ -359,11 +359,11 @@ wpSetValueWhichindexes <- function(x,
 root <- "E:/Research/Global_Relative_Inequalities/Data/"
 pop_raster_dir <- paste0(root,"Population/")
 urbdens_raster_dir <- paste0(root,"Built_Settlement/")
-lan_raster_dir <- paste0(root,"LAN/")
+lan_raster_dir <- paste0(root,"LAN_1992_2018/")
 
 core_number <- 7
 threshold_val <- 5
-years <- c(2000,2003,2006,2009,2012)
+years <- c(2000,2003,2006,2009,2012,2015,2018)
 ##  The year to base the mask off of, i.e. apply the threshold:
 mask_year <- 2012
 use_log <- F
@@ -540,12 +540,12 @@ for(y in years){
   
   rm(pop_ras)
 }
-
+sink(file=paste0(pop_raster_dir,"Derived/Population_Min_Max.txt"))
 print(data.frame(YEAR = years, 
                  POP_MAX = max_vec,
                  # POP_SD = sd_vec)) #,
                  POP_MIN = min_vec))
-
+sink()
 ##  Take the max of the maximums and set the minimum value:
 pop_max <- max(max_vec, na.rm = T)
 # pop_sd <- max(sd_vec, na.rm = T)
@@ -637,6 +637,26 @@ for(y in years){
   urbdens_raster_path <- paste0(urbdens_raster_dir,"Derived/BS_",
                                 y,"_1km_PRP.tif")
   urbdens_ras <- raster(urbdens_raster_path)
+  ##  Resample the data because they don't truely have 0.008333333 resolution, 
+  ##  in fact the x and y resolutions don't even match:
+  if(!file.exists(paste0(urbdens_raster_dir,"Derived/","BS_",y,"_1km_PRP_corr.tif"))&
+     {res(urbdens_ras)[1]!=res(urbdens_ras)[2]}){
+    t_start <- Sys.time()
+    print(paste0("Resampling the BS PRP to uniform grid..."))
+    print(paste0("    Start: ", t_start))
+    resample(urbdens_ras,
+             mask_ras,
+             method="bilinear",
+             filename = paste0(urbdens_raster_dir,"Derived/","BS_",y,
+                               "_1km_PRP_corr.tif"),
+             format="GTiff",
+             datatype=dataType(urbdens_ras),
+             overwrite=T,
+             options=c("COMPRESS=LZW"))
+    print(paste0("    End: ", Sys.time()))
+    urbdens_ras <- raster(paste0(urbdens_raster_dir,"Derived/","BS_",y,
+                                 "_1km_PRP_corr.tif"))
+  }
   
   if(extent(urbdens_ras)!= extent(mask_ras)){
     ymin(urbdens_ras) <- ymin(mask_ras)
@@ -669,7 +689,7 @@ for(y in years){
                                 ifelse(use_log,"_LOG",""),
                                 ".tif"),
               overwrite = T,
-              datatype = "FLT8S",
+              datatype = "FLT4S",
               format = "GTiff",
               options=c("COMPRESS = LZW"))
   
@@ -683,12 +703,12 @@ for(y in years){
   
   rm(urbdens_ras)
 }
-
+sink(file=paste0(urbdens_raster_dir,"Derived/UrbDensity_Min_Max.txt"))
 print(data.frame(YEAR = years,
                  URB_MAX = max_vec,
                  # URB_SD = sd_vec,
                  URB_MIN = min_vec))
-
+sink()
 ##  Take the max of the maximums and set the minimum value:
 urbdens_max <- max(max_vec, na.rm = T)
 # pop_sd <- max(sd_vec, na.rm = T)
@@ -745,24 +765,74 @@ for(y in years){
 max_vec <- c()
 #sd_vec <- c()
 min_vec <- c()
+light_threshold <- 7
 for(y in years){
   print(paste0("Working on LAN stats for year ",y,"..."))
-  ##  Load the LAN raster:
-  lan_raster_path <-  Sys.glob(paste0(lan_raster_dir,"Derived/","dmsp",
-                                      sub("[0-9]{2}([0-9]{2})","\\1",y),"*.tif"))[1]
-  lan_ras <- raster(lan_raster_path)
+  ##  Resample the data because they don't truely have 0.008333333 resolution, 
+  ##  in fact the x and y resolutions don't even match:
+  if(!file.exists(paste0(lan_raster_dir,"Derived/","Harmonized_DN_NTL_",y,
+                         "_resampled.tif"))){
+    ##  Load the LAN raster:
+    lan_raster_path <-  Sys.glob(paste0(lan_raster_dir,"Raw/","Harmonized_DN_NTL_",
+                                        y,"*.tif"))[1]
+    lan_ras <- raster(lan_raster_path)
+    t_start <- Sys.time()
+    print(paste0("Resampling the night-time lights to uniform grid..."))
+    print(paste0("    Start: ", t_start))
+    resample(lan_ras,
+             mask_ras,
+             method="ngb",
+             filename = paste0(lan_raster_dir,"Derived/","Harmonized_DN_NTL_",y,
+                               "_resampled.tif"),
+             format="GTiff",
+             datatype=dataType(lan_ras),
+             overwrite=T,
+             options=c("COMPRESS=LZW"))
+    print(paste0("    End: ", Sys.time()))
+  }
+  lan_raster_path <- paste0(lan_raster_dir,"Derived/","Harmonized_DN_NTL_",y,
+                            "_resampled.tif")
+  lan_ras <- raster(paste0(lan_raster_dir,"Derived/","Harmonized_DN_NTL_",y,
+                           "_resampled.tif"))
+  
+  ##  If the number of cells is smaller than the mask raster, extend the extents 
+  ##  with new cells filled with NA values:
+  ##  NOTE:  This should also rectify the extents but we'll do an additional 
+  ##  check below as well.
+  if(ncell(lan_ras) < ncell(mask_ras)){
+    t_start <- Sys.time()
+    print(paste0("Extending the night-time lights to match masking extents..."))
+    print(paste0("    Start: ", t_start))
+    lan_ras <- extend(lan_ras,mask_ras, value = NA)
+    print(paste0("    End: ", Sys.time()))
+  }
+  
+  ##  Rectify extents if necessary:
   if(extent(lan_ras)!= extent(mask_ras)){
     ymin(lan_ras) <- ymin(mask_ras)
     ymax(lan_ras) <- ymax(mask_ras)
     xmin(lan_ras) <- xmin(mask_ras)
     xmax(lan_ras) <- xmax(mask_ras)
   }
+  
   ##  Mask the plan using the threshold mask:
   s_time <- Sys.time()
   print(paste0("Masking LAN ", y,"..."))
   lan_ras <- lan_ras * mask_ras
   print(paste0("     Start: ", s_time,"     End: ",Sys.time()))
   
+  
+  ##  According to the datset providers, values of DNs less than 7 should not be
+  ##  used due to stability issues so we will set all values less than 7 equal 
+  ##  to zero:
+  t_start <- Sys.time()
+  print(paste0("Replacing low level lights with values of zero..."))
+  print(paste0("    Start: ", t_start))
+  ##  Retrieve the cell indices of cells within our threshold 
+  ##  (should take one minute):
+  foo_ind <- which(values(lan_ras)%in%seq(1, light_threshold,1))
+  lan_ras[foo_ind] <- 0
+  print(paste0("    End: ", Sys.time()))
   
   # ##  Log transofrm the lan prior to getting the descriptive stats:
   if(use_log){
@@ -794,12 +864,12 @@ for(y in years){
   
   rm(lan_ras)
 }
-
+sink(file=paste0(lan_raster_dir,"Derived/LAN_Min_Max.txt"))
 print(data.frame(YEAR = years,
                  LAN_MAX = max_vec,
                  #LAN_SD = sd_vec,
                  LAN_MIN = min_vec))
-
+sink()
 
 
 
