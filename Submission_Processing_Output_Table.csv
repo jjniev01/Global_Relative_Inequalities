@@ -1,0 +1,5 @@
+Submission Script,Processing Script,Output
+single_year_extract_HPC.sh,gri_value_extract_HPC.R,../Output/Extracted_Values/GRI_*.RDS
+single_year.sh,gri_GIniCalc_HPC.R,../Output/GRI_Gini_data_<year>_5.RDS
+single_eyar_USA.sh,gri_GiniCalc_HPC_USA.R,../Output/GRI_Gini_data_<year>_5_USA.RDS
+resample_mosaic.sh,resample_mosaic_usa.R,../Data/Built Settlement/USA_CutData/USA_<built_data_name>_1km.tif
