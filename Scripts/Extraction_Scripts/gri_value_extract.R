@@ -1,6 +1,12 @@
 require(raster)
 require(data.table)
-
+# Script to extract the values of the three layered (population - urban - nighttime lights)
+# rescaled value raster. Outputs a .RDS file (class of contained object is a data.table) with the extracted
+# non-NA pixel values for the given country. The R script called below can be modified to use any zonal raster
+# but currently has the level 0 national boundaries (as defined by the worldpop geospatial library)
+# hardcoded into the script.
+# This version of the script has less input options and attempts to extract for all zones in the zonal raster,
+# i.e. all countries as fed in from our country excel sheet. Would need modifications for more general extractions.
 args <- commandArgs(TRUE)
 
 root <- "/mainfs/scratch/jjn1n15/GRI/"

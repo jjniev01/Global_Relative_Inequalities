@@ -3,6 +3,28 @@ require(snow)
 require(wpUtilities)
 
 
+
+
+####
+##  GENERAL STATEMENTS  ----
+root <- "E:/Research/Global_Relative_Inequalities/Data/"
+pop_raster_dir <- paste0(root,"Population/")
+urbdens_raster_dir <- paste0(root,"Built_Settlement/")
+lan_raster_dir <- paste0(root,"LAN_1992_2018/")
+
+core_number <- 7
+threshold_val <- 5
+years <- c(2000,2003,2006,2009,2012,2015,2018)
+##  The year to base the mask off of, i.e. apply the threshold:
+mask_year <- 2012
+use_log <- F
+make_mask <- F
+##  END:  GENERAL STATEMENTS
+####
+
+
+
+
 ####
 ##  FUNCTION DEFINITIONS  ----
 wpTimeDiff <- function(start, end, frm="hms") {
@@ -354,22 +376,7 @@ wpSetValueWhichindexes <- function(x,
 
 
 
-####
-##  GENERAL STATEMENTS  ----
-root <- "E:/Research/Global_Relative_Inequalities/Data/"
-pop_raster_dir <- paste0(root,"Population/")
-urbdens_raster_dir <- paste0(root,"Built_Settlement/")
-lan_raster_dir <- paste0(root,"LAN_1992_2018/")
 
-core_number <- 7
-threshold_val <- 5
-years <- c(2000,2003,2006,2009,2012,2015,2018)
-##  The year to base the mask off of, i.e. apply the threshold:
-mask_year <- 2012
-use_log <- F
-make_mask <- F
-##  END:  GENERAL STATEMENTS
-####
 
 
 
@@ -951,7 +958,6 @@ for(y in years){
 
 ####  STACKING AND BRICKING TO DISK
 ##    ----
-
 for(year in years){
   s_time <- Sys.time()
   print(paste0("Loading rasters for ", year,"..."))

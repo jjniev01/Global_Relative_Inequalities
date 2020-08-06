@@ -1,15 +1,22 @@
 #!/bin/bash
 #SBATCH --job-name=GRI_Single
-#SBATCH --time=10:00:00         # walltime
+#SBATCH --time=16:00:00         # walltime
 #SBATCH --output=Out.%J         # Name of the output log file
 #SBATCH --error=Err.%J          # Name of the error log file
 #SBATCH --nodes=1               # Number of nodes
 #SBATCH --ntasks-per-node=1     # Tasks per node
+#SBATCH --exclusive             # Don't share compute node with anyone
 #SBATCH --mail-type=END,FAIL 
 #SBATCH --mail-user=j.j.nieves@soton.ac.uk
 
 cd ${SLURM_SUBMIT_DIR}
 
+# Submission script to extract the values of the three layered (population - urban - nighttime lights)
+# rescaled value raster and calculate a corresponding Gini coefficient and the interquartile range. Outputs a .RDS file (class of contained object is a data.table) with the calculated values for each country. The R script called below can be modified to use any zonal raster
+# but currently has the level 0 national boundaries (as defined by the worldpop geospatial library)
+# hardcoded into the script.
+# This version of the script has less input options and attempts to extract for all zones in the zonal raster,
+# i.e. all countries as fed in from our country excel sheet. Would need modifications for more general extractions.
 
 TMPDIR=/tmp
 
@@ -24,9 +31,10 @@ ulimit -s unlimited
 PRJPATH=/mainfs/scratch/jjn1n15/GRI/
 
 YEAR=2018
-CORES=1
+CORES=12
 THRESHOLD=5
 MAKESUM=FALSE
+REPROCESS=FALSE
 
 # Declare our input argument file. Each row is a job where the arguments are as follows.
 # YEAR - year of interest to process
@@ -44,7 +52,7 @@ MAKESUM=FALSE
 #INFILE=inGRI.csv
 #read YEAR CORES THRESHOLD MAKESUM
 
-Rscript --no-restore --no-save --vanilla --slave gri_GiniCalc_HPC.R $YEAR $CORES $THRESHOLD $MAKESUM
+Rscript --no-restore --no-save --vanilla --slave gri_extratc_GiniCalc_HPC.R $YEAR $CORES $THRESHOLD $MAKESUM $REPROCESS
 			
 			
 
