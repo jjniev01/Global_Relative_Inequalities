@@ -5,7 +5,7 @@ require(data.table)
 require(gdalUtils)
 require(rgdal)
 require(snow)
-require(doParallel)
+# require(doParallel)
 
 root <- "E:/Research/Global_Relative_Inequalities/Data/Built_Settlement/"
 
@@ -33,7 +33,7 @@ reprocess_binaries <- F
 reprocess_resample <- F
 
 ##  Do we interpolate and or extrapolate?
-process_interp <- F
+process_interp <- T
 process_extrap <- T
 
 if(process_interp){
@@ -258,7 +258,7 @@ cluster_lin_interp <- function(prediction_raster_path_list,
     ## predict for those cells (where we subset our data according to the 
     ## roi_subset and remove the census zone and water mask columns (length(row_data) - 2):
     #
-    if(sum(roi_subset) > 0){
+    if(any(roi_subset)){
       ##  Get the linear slope by subtracting the 2000 proportion values from 
       ##  the 2012 proporton values and dividing by the number of years:
       slope_set <- {row_data[roi_subset,2]-row_data[roi_subset,1]}/{2012-2000}
@@ -441,7 +441,8 @@ cluster_lin_interp <- function(prediction_raster_path_list,
 ##  our area of interest, then we put a value of zero in the mask and 1 
 ##  everywhere else so we multiply the mask by the original layer.
 
-for(shp in usa_shp_paths){
+for(s in usa_shp_paths){
+  shp <- usa_shp_paths[s]
   state <- strsplit(basename(shp),".shp")[[1]]
   print(paste0("Working on state: ", state))
   if(mask_reprocess == T | 
@@ -483,21 +484,43 @@ for(shp in usa_shp_paths){
     shpf <- st_read(shp, state)
     ##  Bring in the USA level1 mastergrid:
     l1_master_usa <- raster(l1_master_usa_path)
+    rm(l1_master_usa)
     
     ##  Crop to the extents of the shapefile:
     l1_master_usa_crop <- crop(l1_master_usa,shpf)
     
     ##  Replace all values that are zero or NA with a 1:
-    l1_master_usa_crop[values(l1_master_usa_crop)==0|
-                         is.na(l1_master_usa_crop)] <- 1
-    l1_master_usa_crop[values(l1_master_usa_crop)>1]<-0
+    start_t <- Sys.time()
+    foo_ind_1 <- values(l1_master_usa_crop)==0
+    l1_master_usa_crop[foo_ind_1] <- 1
+    rm(foo_ind_1)
+    gc()
+    print(paste0("     Start: ", start_t))
+    print(paste0("     End: ", Sys.time()))
     
+    start_t <- Sys.time()
+    foo_ind_2 <- is.na(values(l1_master_usa_crop))
+    l1_master_usa_crop[foo_ind_2] <- 1
+    rm(foo_ind_2)
+    gc()
+    print(paste0("     Start: ", start_t))
+    print(paste0("     End: ", Sys.time()))
+    
+    ##  Replace all values greater than 1 with a zero:
+    start_t <- Sys.time()
+    foo_ind_3 <- values(l1_master_usa_crop)>1
+    l1_master_usa_crop[foo_ind_3]<-0
+    rm(foo_ind_3)
+    gc()
+    print(paste0("     Start: ", start_t))
+    print(paste0("     End: ", Sys.time()))
     writeRaster(l1_master_usa_crop,
                 filename = paste0(root,"Masks/",state,"_eraser_mask.tif"),
                 format = "GTiff",
                 datatype = "INT1U",
                 overwrite=T,
                 options=c("COMPRESS=LZW"))
+    rm(l1_master_usa_crop)
   }
 }
 
@@ -660,6 +683,11 @@ if(reprocess_resample == T){
   }
 }
 
+
+
+
+##  INTERPOLATION  -----
+
 ##  Prepare to tile the whole USA rasters for interpolation
 ##  Get the two rasters and bring them in:
 usa_2000_path <- paste0(root,"USA_CutData/",
@@ -708,44 +736,99 @@ if(extent_match == "Extents do not match." |
 if(extent_match == "Extents match." & 
    n_pixels == "Same number of pixels"){
   
-  ##  Create 3 template rasters to hold our predictions:
-  prediction_raster <- raster(usa_2000_path)
-  
-  ##  Figure out our number of blocks:
-  blocks <- blockSize(prediction_raster, minblocks=850, n = 3)
-  
-  
-  ##  Construct the list of our output raster paths:
-  ##  NOTE:  These files will be at 0.008333 resolution and have values 
-  ##  representing interpolated BS as constructed from 100m data.
-  eval_str <- paste0("prediction_ras_path_list <- list(")
-  for(t in 1:length(process_years)){
-    foo_str <- paste0("paste0(root,",
-                      sprintf("'USA_%d_BS_1km.tif')",process_years[t]),
-                      ifelse(t!=length(process_years),", ",""))
-    eval_str <- paste0(eval_str, foo_str)
-  }
-  eval_str <- paste0(eval_str, ")")
-  
-  ##  Create a list of the prediction raster paths:
-  eval(parse(text=eval_str))
-  # prediction_ras_path_list <- list(paste0(root,"USA_2003_BS_1km.tif"),
-  #                                  paste0(root,"USA_2006_BS_1km.tif"),
-  #                                  paste0(root,"USA_2009_BS_1km.tif"),
-  #                                  paste0(root,"USA_2015_BS_1km.tif"),
-  #                                  paste0(root,"USA_2018_BS_1km.tif"))
-  
-  ##  Stack the 2 USA rasters together:
-  usa_stack <- stack(list(usa_2000_path,usa_2012_path))
   start_t <- Sys.time()
-  ##  Carry out the interpolation using the cluster farm:
-  beginCluster()
-  cluster_lin_interp(prediction_raster_path_list = prediction_ras_path_list,
-                     prediction_raster = prediction_raster,
-                     blocks = blocks)
-  endCluster()
+  ##  Make the log transformed versions:
+  usa_2000_ras <- log({usa_2000_ras+0.001},
+                      base=exp(1))
+  usa_2012_ras <- log({usa_2012_ras+0.001},
+                      base=exp(1))
+  usa_log_slope <- {usa_2012_ras-usa_2000_ras}/12
+  
+  
+  ##  Write the raster to file:
+  writeRaster(usa_log_slope,
+              filename = paste0(root,"USA_logistic_slope_raster_2012_2000.tif"),
+              datatype=dataType(usa_2000_ras),
+              overwrite=T,
+              format="GTiff",
+              options=c("COMPRESS = LZW"))
+  
+  
+  for(y in process_years){
+    ##  Calculate the amount of change for our year and add it to the base year:
+    if(y < 2012){
+      foo_log_ras <- usa_2000_ras + {usa_log_slope*{y-2000}}
+    }
+    if(y > 2012){
+      foo_log_ras <- usa_2012_ras + {usa_log_slope*{y-2012}}
+    }
+    
+    ##  Back transform our data:
+    foo_ras <- exp(foo_log_ras)-0.001
+    rm(foo_log_ras)
+    
+    ##  Make sure any extremely small value artifacts are set to 0:
+    foo_ras[foo_ras < 0.00001 ] <- 0
+    
+    ##  If we are looking at extrapolation, make sure any values over 1 are 
+    ##  capped at 1:
+    if(y > 2012){
+      foo_ras[foo_ras > 1] <- 1
+    }
+    
+    writeRaster(foo_ras,
+                filename = paste0(root,"USA_",y,"_BS_1km.tif"),
+                datatype=dataType(usa_2000_ras),
+                overwrite=T,
+                format="GTiff",
+                options=c("COMPRESS = LZW"),
+                verbose=T)
+    rm(foo_ras)
+  }
+  
+  
+  
+  
+  # ##  Create 3 template rasters to hold our predictions:
+  # prediction_raster <- raster(usa_2000_path)
+  # 
+  # ##  Figure out our number of blocks:
+  # blocks <- blockSize(prediction_raster,
+  #                     minblocks=850, 
+  #                     n = length(process_years))
+  # 
+  # 
+  # ##  Construct the list of our output raster paths:
+  # ##  NOTE:  These files will be at 0.008333 resolution and have values 
+  # ##  representing interpolated BS as constructed from 100m data.
+  # eval_str <- paste0("prediction_ras_path_list <- list(")
+  # for(t in 1:length(process_years)){
+  #   foo_str <- paste0("paste0(root,",
+  #                     sprintf("'USA_%d_BS_1km.tif')",process_years[t]),
+  #                     ifelse(t!=length(process_years),", ",""))
+  #   eval_str <- paste0(eval_str, foo_str)
+  # }
+  # eval_str <- paste0(eval_str, ")")
+  # 
+  # ##  Create a list of the prediction raster paths:
+  # eval(parse(text=eval_str))
+  # # prediction_ras_path_list <- list(paste0(root,"USA_2003_BS_1km.tif"),
+  # #                                  paste0(root,"USA_2006_BS_1km.tif"),
+  # #                                  paste0(root,"USA_2009_BS_1km.tif"),
+  # #                                  paste0(root,"USA_2015_BS_1km.tif"),
+  # #                                  paste0(root,"USA_2018_BS_1km.tif"))
+  # 
+  # ##  Stack the 2 USA rasters together:
+  # usa_stack <- stack(list(usa_2000_path,usa_2012_path))
+
+  # ##  Carry out the interpolation using the cluster farm:
+  # beginCluster()
+  # cluster_lin_interp(prediction_raster_path_list = prediction_ras_path_list,
+  #                    prediction_raster = prediction_raster,
+  #                    blocks = blocks)
+  # endCluster()
 }
-rm(usa_stack,prediction_raster)
+rm(usa_2000_ras, usa_2000_ras, usa_log_slope)
 gc()
 
 print(paste0("     Start: ", start_t))
@@ -761,9 +844,7 @@ for(y in c(process_years)){
   usa_shp_50 <- st_read(paste0(usa_shp_dir,"840_USA.shp"),
                         layer= "840_USA",stringsAsFactors = F)
   usa_shp_50$mask_val <- 0
-  ##TODO:  JJN 2020-03-12 ISSUE with the shapefile not lining up with the US 
-  ##       extents and not zeroing out their values. Need to see if I can get 
-  ##  the L0 raster to line up with it
+  
   
   print(paste0("Rasterizing USA '0 1 NA' Mask..."))
   ##  Create a mask (global in extent) where the USA portion has a value of zero
@@ -776,12 +857,22 @@ for(y in c(process_years)){
                                background = 1)
   
   print(paste0("Masking global layer for year ",y ,"..."))
+  ##  If we we are using 2018, the base global layer from worldpop has all no 
+  ##  data in the US. Need to turn those into 0 values instead otherwise we end 
+  ##  up adding new values to NA producing more NA values.
+  if(y == 2018){
+    indx <- which(values(usa_mask_0_1_NA)==0)
+    global_ras[indx] <- 0
+    rm(indx)
+  }
   ##  Multiply the mask by the original global BS PRP layer, i.e. erase the 
-  ##  existing US values which remained static between 2000 and 2012:
+  ##  existing US values which remained static between 2000 and 2012 in the 
+  ##  worldpop files:
   global_ras_masked <- global_ras * usa_mask_0_1_NA
   
-  rm(global_ras)
   
+  rm(global_ras, usa_mask_0_1_NA)
+  gc()
   
   print(paste0("Overwriting USA interpolated values for year ", y, "..."))
   ##  Add the interpolated USA raster values to a raster that has the extents of 
@@ -814,5 +905,23 @@ for(y in c(process_years)){
               overwrite = T,
               options=c("COMPRESS = LZW"))
   rm(global_ras_redone, global_ras_masked, new_bs_1km_usa)
+  gc()
+}
+for(y in c(2015,2018)){
+  print(y)
+  ##TODO:  JJN 2020-08 ISSUE with the shapefile not lining up with the US 
+  ##       extents and not zeroing out their values. Need to see if I can get 
+  ##       the L0 raster to line up with it
+  ##  For now, since they are literally a handful of pixels on the coast, we 
+  ##  will simply max them out at 1 for now:
+  global_ras_redone <- raster(paste0(root, "Prp_1km/BS_",y,"_1km_PRP_w_USA_interp.tif"))
+  global_ras_redone[global_ras_redone>1] <- 1
+  writeRaster(global_ras_redone,
+              file = paste0(root, "Prp_1km/BS_",y,"_1km_PRP_w_USA_interp.tif"),
+              format = "GTiff",
+              datatype = "FLT4S", 
+              overwrite = T,
+              options=c("COMPRESS = LZW"))
+  rm(global_ras_redone)
   gc()
 }
