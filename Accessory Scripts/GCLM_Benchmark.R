@@ -2,13 +2,14 @@ require(raster)
 require(glcm)
 require(data.table)
 require(microbenchmark)
+
 ##  Row number to start our benchmarking on in case we need to restart because 
 ##  of a crash or an interrupt:
 inter_start <- NULL
 ##  Number of repetitions per benchmark:
 repetitions <- 10
 ##  Raster dimensions in numbers of pixels:
-ras_dims <- c(100,500,seq(1000,5000,by=1000),10000,50000,100000)
+ras_dims <- c(100,500,seq(1000,3000,by=1000))#5000,by=1000),10000,50000,100000)
 ## Numebr of grey levels to use in quantizization:
 grey_levels <- c(8,16,48,124,256)
 ##  Size of rectangular search window in pixels (must be odd to be able to have a "center":
@@ -19,25 +20,20 @@ n_ras_dims <- length(ras_dims)
 n_grey_levels <- length(grey_levels)
 n_search_window <- length(search_window)
 
-##  Make pairwise combination out of the three specified levels:
-ras_dims <- rep(ras_dims,times=n_grey_levels*n_search_window)
-grey_levels <- rep(grey_levels, each=n_ras_dims*n_search_window)
-search_window<-rep(search_window,times=n_grey_levels*n_ras_dims)
+##  Make unique combination out of the three specified levels:
+unique_combos <- CJ(ras_dims, grey_levels, search_window, unique=TRUE)
+
 ##  Table for holding the stats on the time runs
-process_stats_dt <- data.table("RASTER.DIMS"=ras_dims,
-                               "RAS.INDEX"=seq(1:n_ras_dims),
-                               "GREY.LEVELS"=grey_levels,
-                               "SEARCH.WINDOW"=search_window,
+process_stats_dt <- data.table("RASTER.DIMS"=unique_combos$ras_dims,
+                               "RAS.INDEX"=rep(seq(1:n_ras_dims),each=20),
+                               "GREY.LEVELS"=unique_combos$grey_levels,
+                               "SEARCH.WINDOW"=unique_combos$search_window,
                                "MED.TIME"=numeric(),
                                "AVG.TIME"=numeric(),
                                "LQ.TIME"=numeric(),
                                "UQ.TIME"=numeric(),
                                "N.REP"=repetitions
                                )
-##  Remove duplicates:
-process_stats_dt<-process_stats_dt[!duplicated(process_stats_dt),]
-
-
 
 ##  List to hold rasters:
 test_ras_list<-vector(mode="list",length=n_ras_dims)
