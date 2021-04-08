@@ -85,101 +85,103 @@ giniCalc <- function(i){
   ##  Get the geographic ID (ISOCODE) of the country we are working with:
   g <- gini_dt[i]$ISO_number
   
-  print(paste0("     GID ", g))
-  if(!file.exists(paste0(outdir,"Extracted_Values/","GRI_",g,"_",year,
-                         "_threshold_",threshold_val,"_USA.RDS")) | reprocess){
+    ##  Extract the values from the value raster:
+  foo_values <- extract(value_ras,
+                        which(values(zonal_ras)==g))
+  ##  IF the extraction didn't come up null:
+  if(!is.null(foo_values)){
+    ##  For each of the layer-columns:
     for(l in 1:3){
-      ##  Extract the values:
-      if(l==1){
-        foo_values <- extract(value_ras,
-                              which(values(zonal_ras)==g))
-        ##  Intialize the data.table for storage:
-        foo_val_dt <- data.table(VALUE_1=numeric(length=length(foo_values)),
-                                 VALUE_2=numeric(length=length(foo_values)),
-                                 VALUE_3=numeric(length=length(foo_values)))
-        foo_val_dt[,paste0("VALUE_",l):=foo_values]
+      ## Remove any NA values:
+      foo_slice <- foo_values[!is.na(foo_values[,l]),l]
+      if(!is.null(foo_slice)){
+        ##  Sort in ascending order:
+        foo_slice <- foo_slice[order(foo_slice)]
+        
+        foo_gini <- gini(foo_slice)
+        foo_quant <- quantile(foo_slice,
+                              probs = c(0.25,0.5,0.75))
+        foo_25 <- as.numeric(foo_quant[1])
+        foo_50 <- as.numeric(foo_quant[2])
+        foo_75 <- as.numeric(foo_quant[3])
       }else{
-        foo_val_dt[,paste0("VALUE_",l) := foo_values]
+        foo_gini <- NA
+        foo_quant <- NA
+        foo_25 <- NA
+        foo_50 <- NA
+        foo_75 <- NA
+      }
+      ##  Store desired metrics:
+      if(l==1){
+        pop_gini <- foo_gini
+        pop_25 <- foo_25
+        pop_50 <- foo_50
+        pop_75 <- foo_75
+      }
+      if(l==2){
+        urb_gini <- foo_gini
+        urb_25 <- foo_25
+        urb_50 <- foo_50
+        urb_75 <- foo_75
+      }
+      if(l==3){
+        lan_gini <- foo_gini
+        lan_25 <- foo_25
+        lan_50 <- foo_50
+        lan_75 <- foo_75
       }
     }
-    ##  Rename the columns:
-    names(foo_val_dt)<-c("POP_0_1","URB_0_1","LAN_0_1")
-    
-    ##  Calculate a Total column that is the sum of the population, urban and 
-    ##  lights at night data:
-    foo_val_dt[,TOT:={POP_0_1+URB_0_1+LAN_0_1}]
-    
-    ##  Remove any records/rows that have an NA value:
-    foo_val_dt <- na.omit(foo_val_dt)
-    
-    foo_val_dt[,GID:=g]
-    foo_val_dt[,YEAR:=as.numeric(year)]
-    
-    ##  Write the data.table to file:
-    saveRDS(foo_val_dt,
-            file = paste0(outdir,"Extracted_Values/","GRI_",g,"_",year,
-                          "_threshold_",threshold_val,".RDS"))
-  }else{
-    foo_val_dt <- readRDS(paste0(outdir,"Extracted_Values/","GRI_",g,"_",year,
-                                 "_threshold_",threshold_val,".RDS"))
-  }
-  ##  Retrieve column names that aren't GID or YEAR:
-  col_names <- names(foo_val_dt)[!{names(foo_val_dt) %in% c("GID","YEAR")}]
-  
-  ##  For each column:
-  for(cols in 1:4){
-    ## Pull a single column of data:
-    foo_values <- foo_val_dt[,get(col_names[cols])]
-    
-    ##  If the data is not NULL:
-    if(!is.null(foo_values)){
-      ##  Sort in ascending order:
-      foo_values <- foo_values[order(foo_values)]
-      
-      ##  Calculate gini value and quantiles:
-      foo_gini <- gini(foo_values)
-      foo_quant <- quantile(foo_values,
-                            probs = c(0.25,0.5,0.75))
-      foo_25 <- as.numeric(foo_quant[1])
-      foo_50 <- as.numeric(foo_quant[2])
-      foo_75 <- as.numeric(foo_quant[3])
-      
-    }else{
-      foo_gini <- NA
-      foo_quant <- NA
-      foo_25 <- NA
-      foo_50 <- NA
-      foo_75 <- NA
-    } 
-    
-    ##  Assign desired metrics to holders:
-    if(cols==1){
-      pop_gini <- foo_gini
-      pop_25 <- foo_25
-      pop_50 <- foo_50
-      pop_75 <- foo_75
-    }
-    if(cols==2){
-      urb_gini <- foo_gini
-      urb_25 <- foo_25
-      urb_50 <- foo_50
-      urb_75 <- foo_75
-    }
-    if(cols==3){
-      lan_gini <- foo_gini
-      lan_25 <- foo_25
-      lan_50 <- foo_50
-      lan_75 <- foo_75
-    }
-    if(cols==4){
-      tot_gini <- foo_gini
-      tot_25 <- foo_25
-      tot_50 <- foo_50
-      tot_75 <- foo_75
-    }
-    rm(foo_values)
+    rm(foo_slice)
     gc()
-  }
+    
+    ##  Calculate our sums across all the layers:
+    foo_tot_values <- rowSums(foo_values)
+    ##  As long as the total values didn't come up null:
+    if(!is.null(foo_tot_values)){  
+      ##  Remove NA values:
+      foo_tot_values <- foo_tot_values[!is.na(foo_tot_values)]
+      
+      ##  Sort in ascending order:
+      foo_tot_values <- foo_tot_values[order(foo_tot_values)]
+      
+      tot_gini <- gini(foo_tot_values)
+      tot_quant <- quantile(foo_tot_values,
+                                probs = c(0.25,0.5,0.75))
+      tot_25 <- as.numeric(tot_quant[1])
+      tot_50 <- as.numeric(tot_quant[2])
+      tot_75 <- as.numeric(tot_quant[3])
+    }
+  }else{
+      ##  IF foo_values is completely null then we set everything to NA
+      pop_gini <- NA
+      pop_25 <- NA
+      pop_50 <- NA
+      pop_75 <- NA
+      
+      urb_gini <- NA
+      urb_25 <- NA
+      urb_50 <- NA
+      urb_75 <- NA
+      
+      
+      lan_gini <- NA
+      lan_25 <- NA
+      lan_50 <- NA
+      lan_75 <- NA
+      
+      
+      tot_gini <- NA
+      tot_quant <- NA
+      tot_25 <- NA
+      tot_50 <- NA
+      tot_75 <- NA
+      
+    }
+    
+  rm(foo_tot_values)
+  gc()
+  
+
   ##  Store the admin_ind and the corresponding probabilities in a list
   ##  within a listthe list under the character representation of the admin
   ##  id so we can retrieve them in our chunking of tasks:
@@ -473,7 +475,7 @@ gini_dt <- data.table("ISO_number" = iso_codes,
                       ##  75th percentile
                       "P75_tot" = numeric(length = length(iso_codes)))
 
-value_ras <- raster(paste0(root,"Output/",
+value_ras <- brick(paste0(root,"Output/",
                            "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
                            threshold_val,".tif"))
 
@@ -512,4 +514,4 @@ if(core_number >1){
 }
 wpTimeDiff(s_time,Sys.time())
 saveRDS(gini_dt_filled,
-        file = paste0(root,"Output/GRI_Gini_data_",year,"_",threshold_val,"_USA.RDS"))
+        file = paste0(root,"Output/GRI_Gini_data_",year,"_",threshold_val,"_",iso_codes,".RDS"))

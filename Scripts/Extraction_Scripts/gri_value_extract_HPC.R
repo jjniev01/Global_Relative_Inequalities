@@ -90,29 +90,17 @@ wpProgressMessage <- function (x, max = 100, label=NULL) {
 
 
 
+
 extractPrll <- function(i){
   ##  Get the unique GID:
   g <- iso_codes[i]
   
   
-  ##  TODO:  PUT IN SOME LOGIC PRIOR TO CLUSTER INITIALIZATION THAT DETERMINES 
-  ##         IF THE FILES ALREADY EXIST, IF WE WANT TO OVERWRITE ANY EXISTING, 
-  ##         AND TAILOR THE ISOCODES PASSED TO THE CLUSTER
-  # if(!file.exists(paste0(outdir,"GRI_",g,"_",year,
-  #                        "_threshold_",threshold_val,".RDS")) | overwrite){
-  for(l in 1:3){
-    foo_values <- extract(value_ras,
-                          which(values(zonal_ras)==g))
-    if(l == 1){
-      foo_dt <- data.table("VALUE_1" = foo_values)
-    }
-    if(l == 2){
-      foo_dt[,"VALUE_2" := foo_values]
-    }
-    if(l == 3){
-      foo_dt[,"VALUE_3" := foo_values]
-    }
-  }
+  foo_values <- extract(value_ras,
+                        which(values(zonal_ras)==g))
+  foo_dt <- data.table("VALUE_1" = foo_values[,1],
+                       "VALUE_2" = foo_values[,2],
+                       "VALUE_3" = foo_values[,3])
   foo_dt[,"VALUE_TOT" := {VALUE_1+VALUE_2+VALUE_3}]
   foo_dt[,NA_Flag := {is.na(VALUE_1)&is.na(VALUE_2)&
       is.na(VALUE_3)&is.na(VALUE_TOT)}]
@@ -120,6 +108,7 @@ extractPrll <- function(i){
   
   return(foo_dt)
 }
+
 
 
 
@@ -167,12 +156,6 @@ for(t in 1:length(iso_codes)){
   }
 }
 iso_codes <- iso_codes[iso_logic]
-
-
-
-value_ras <- raster(paste0(root,"Output/",
-                           "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
-                           threshold_val,".tif"))
 
 
 
@@ -273,6 +256,14 @@ clusterExtract <- function(zonal_ras,
     )
   }
 }
+
+
+
+
+value_ras <- brick(paste0(root,"Output/",
+                           "ppkm_urb_lan_rescale_stack_",year,"_threshold_",
+                           threshold_val,".tif"))
+
 
 
 

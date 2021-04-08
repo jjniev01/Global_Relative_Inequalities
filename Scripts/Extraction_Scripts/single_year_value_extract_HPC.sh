@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=GRI_extract
+#SBATCH --job-name=GRI_extract_nonexclusive
 #SBATCH --time=20:00:00         # walltime
 #SBATCH --output=Out.%J         # Name of the output log file
 #SBATCH --error=Err.%J          # Name of the error log file
 #SBATCH --nodes=1               # Number of nodes
-#SBATCH --ntasks-per-node=1
-#SBATCH --exclusive
+#SBATCH --ntasks-per-node=8
+#SBATCH --mem=32G
 #SBATCH --mail-type=END,FAIL 
 #SBATCH --mail-user=j.j.nieves@soton.ac.uk
 

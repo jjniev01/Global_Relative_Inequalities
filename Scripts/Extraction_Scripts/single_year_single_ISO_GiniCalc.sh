@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=GRI_RUS
-#SBATCH --time=15:00:00         # walltime
+#SBATCH --time=2:00:00         # walltime
 #SBATCH --output=Out.%J         # Name of the output log file
 #SBATCH --error=Err.%J          # Name of the error log file
 #SBATCH --nodes=1               # Number of nodes
@@ -28,7 +28,7 @@ YEAR=2015
 CORES=1
 THRESHOLD=5
 MAKESUM=FALSE
-ISO_NUM=840
+ISO_NUM=51
 
 # Declare our input argument file. Each row is a job where the arguments are as follows.
 # YEAR - year of interest to process
